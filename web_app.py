@@ -114,4 +114,17 @@ elif page in ("سجل العمال والبنوك", "Workers & Banks"):
         otr = c11.number_input("أجر الإضافي/ساعة" if is_rtl else "OT Rate / Hr", value=0.600, format="%.3f")
         cr_rate = c12.number_input("سعر الساعة للشركة" if is_rtl else "Client Hourly Rate", value=1.200, format="%.3f")
         if st.form_submit_button("إضافة عامل +" if is_rtl else "+ Add Worker", type="primary") and war and cmap:
-            conn.execute("INSERT INTO workers (name_ar,name_en,id_type,passport_id,bank_bic,bank_account,trade,daily_rate,agreed_daily_hours,ot_rate,standard_days,client_hourly_rate,client_id,salary_due_day) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (war.strip(), (wen or war).strip(), idt, pid.strip(), bic.strip(), iban.strip(), trd, dr, dhrs, otr, 30, cr_rate, cmap[cl_sel], 28)); conn.commit(); st.rerun()
+                    conn.execute("INSERT INTO workers (name_ar,name_en,id_type,passport_id,bank_bic,bank_account,trade,daily_rate,agreed_daily_hours,ot_rate,standard_days,client_hourly_rate,client_id,salary_due_day) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (war.strip(), (wen or war).strip(), idt, pid.strip(), bic.strip(), iban.strip(), trd, dr, dhrs, otr, 30, cr_rate, cmap[cl_sel], 28)); conn.commit(); st.rerun()
+    q_wk = "SELECT w.id AS الرقم, w.name_ar AS 'الاسم عربي', w.name_en AS 'Name EN', w.trade AS المهنة, c.name_ar AS الشركة, w.daily_rate AS 'أجر اليوم', COALESCE(w.agreed_daily_hours,10) AS 'ساعات اليوم', w.client_hourly_rate AS 'سعر الشركة', w.passport_id AS الهوية, w.bank_account AS الحساب FROM workers w LEFT JOIN clients c ON w.client_id=c.id ORDER BY w.id DESC" if is_rtl else "SELECT w.id AS ID, w.name_ar AS 'Name (AR)', w.name_en AS 'Name (EN)', w.trade AS Trade, c.name_en AS Client, w.daily_rate AS 'Daily Rate', COALESCE(w.agreed_daily_hours,10) AS 'Daily Hrs', w.client_hourly_rate AS 'Client Rate', w.passport_id AS 'ID/Pass', w.bank_account AS Account FROM workers w LEFT JOIN clients c ON w.client_id=c.id ORDER BY w.id DESC"
+    st.dataframe(pd.read_sql_query(q_wk, conn), width="stretch", hide_index=True)
+
+elif page in ("التايم شيت والخصومات", "Timesheet & OT"):
+    render_timesheet_page(conn, is_rtl)
+
+elif page in ("فواتير كل شهر", "Monthly Invoices"):
+    render_invoices_page(conn, is_rtl)
+
+elif page in ("كشف الرواتب وحماية الأجور", "Payroll & Oman WPS"):
+    render_payroll_page(conn, is_rtl)
+
+conn.close()
