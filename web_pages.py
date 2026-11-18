@@ -79,3 +79,21 @@ def render_payroll_page(conn, is_rtl):
         for myr, wid, nar, nen, idt, pid, bic, iban, trd, due, car, cen, wd, dr, oth, otr, ded, adv, net, inv, rem in data:
             w.writerow([idt, pid, f"GL-{wid:03d}", nen, bic, iban, "M", int(wd), f"{net:.3f}", f"{round(wd*dr,3):.3f}", oth, f"{round(oth*otr,3):.3f}", f"{round(adv,3):.3f}", "0.000", rem or f"Salary {myr}"])
         b1, b2 = st.columns(2)
+    if data:
+        tot_net, first_m, xls_rows = 0.0, "", []
+        for myr, wid, nar, nen, idt, pid, bic, iban, trd, due, car, cen, wd, dr, oth, otr, ded, adv, net, inv, rem in data:
+            tot_net += float(net or 0); first_m = first_m or str(myr)
+            xls_rows.append((myr, nar, nen, trd, cen, float(wd), float(ded), float(adv), float(net), float(inv)))
+        yr_s, mo_s = first_m.split("-") if "-" in first_m else (datetime.now().strftime("%Y"), datetime.now().strftime("%m"))
+        buf = io.StringIO(); w = csv.writer(buf)
+        w.writerow(["Employer CR-NO", "Employer Name", "Payer Bank Short Name", "Payer Account Number", "Salary Year", "Salary Month", "Total Salaries", "Number of Records", "Payment Type"])
+        w.writerow([cr_v, nm_v, bk_v, ac_v, yr_s, mo_s, f"{tot_net:.3f}", len(data), "Salary"])
+        w.writerow(["Employee ID Type", "Employee ID", "Reference Number", "Employee Name", "Employee Bank BIC", "Employee Account", "Salary Frequency", "Number of Working Days", "Net Salary", "Basic Salary", "Extra Hours", "Extra Income", "Deductions", "Social Security Ded.", "Notes / Comments"])
+        for myr, wid, nar, nen, idt, pid, bic, iban, trd, due, car, cen, wd, dr, oth, otr, ded, adv, net, inv, rem in data:
+            w.writerow([idt, pid, f"GL-{wid:03d}", nen, bic, iban, "M", int(wd), f"{net:.3f}", f"{round(wd*dr,3):.3f}", oth, f"{round(oth*otr,3):.3f}", f"{round(adv,3):.3f}", "0.000", rem or f"Salary {myr}"])
+        b1, b2 = st.columns(2)
+        b1.download_button("⬇️ تحميل ملف البنك المركزي (SIF CSV)" if is_rtl else "⬇️ Download Oman WPS (SIF CSV)", data=buf.getvalue().encode("utf-8"), file_name=f"SIF_{cr_v}_{bk_v}_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", width="stretch")
+        xls_pay = build_styled_xlsx("GLOBAL LINES SPC - Payroll & Profit Report", ["Month", "Worker (AR)", "Worker (EN)", "Trade", "Client", "Days", "Deduct", "Advance", "Net Salary", "Invoice"], xls_rows, (7, 8, 9, 10))
+        b2.download_button("⬇️ تصدير التقرير الإداري (.XLSX)" if is_rtl else "⬇️ Export Admin Report (.XLSX)", data=xls_pay, file_name=f"GLOBAL_LINES_Payroll_{datetime.now().strftime('%Y%m')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
+    q_py = "SELECT t.month_year AS الشهر, COALESCE(w.name_ar,'محذوف') AS العامل, COALESCE(w.trade,'-') AS المهنة, COALESCE(c.name_ar,'-') AS الشركة, t.working_days AS الأيام, t.deduction_amount AS الخصم, t.advance_salary AS السلفة, t.net_salary AS 'صافي الراتب', t.invoice_amount AS الفاتورة FROM timesheets t LEFT JOIN workers w ON t.worker_id=w.id LEFT JOIN clients c ON w.client_id=c.id ORDER BY t.id DESC" if is_rtl else "SELECT t.month_year AS Month, COALESCE(w.name_en,'Deleted') AS Worker, COALESCE(w.trade,'-') AS Trade, COALESCE(c.name_en,'-') AS Client, t.working_days AS Days, t.deduction_amount AS Deduction, t.advance_salary AS Advance, t.net_salary AS 'Net Salary', t.invoice_amount AS Invoice FROM timesheets t LEFT JOIN workers w ON t.worker_id=w.id LEFT JOIN clients c ON w.client_id=c.id ORDER BY t.id DESC"
+    st.dataframe(pd.read_sql_query(q_py, conn), width="stretch", hide_index=True)
