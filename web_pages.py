@@ -5,6 +5,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from datetime import datetime
 from database import ATTACHMENTS_DIR
+from web_admin import manage_record_bar
 
 def build_styled_xlsx(title_txt, headers, rows_list, money_cols):
     wb = Workbook(); ws = wb.active; ws.title = "Report"
@@ -57,6 +58,7 @@ def render_timesheet_page(conn, is_rtl):
     q_ar = "SELECT t.id AS الرقم, t.month_year AS الشهر, w.name_ar AS العامل, t.working_days AS الأيام, COALESCE(t.actual_hours,0) AS 'الساعات الفعلية', COALESCE(t.shortage_hours,0) AS 'نقص الساعات', t.deduction_amount AS الخصم, t.ot_hours AS 'إجمالي الإضافي', t.advance_salary AS السلفة, t.net_salary AS 'صافي الراتب', t.billed_hours AS 'ساعات الفاتورة', t.invoice_amount AS الفاتورة FROM timesheets t JOIN workers w ON t.worker_id=w.id ORDER BY t.id DESC"
     q_en = "SELECT t.id AS ID, t.month_year AS Month, w.name_en AS Worker, t.working_days AS Days, COALESCE(t.actual_hours,0) AS 'Actual Hrs', COALESCE(t.shortage_hours,0) AS 'Short Hrs', t.deduction_amount AS Deduction, t.ot_hours AS 'Total OT', t.advance_salary AS Advance, t.net_salary AS 'Net Salary', t.billed_hours AS 'Billed Hrs', t.invoice_amount AS Invoice FROM timesheets t JOIN workers w ON t.worker_id=w.id ORDER BY t.id DESC"
     st.dataframe(pd.read_sql_query(q_ar if is_rtl else q_en, conn), width="stretch", hide_index=True)
+    manage_record_bar(conn, "timesheets", {"month_year": ("الشهر", "Month", "text"), "working_days": ("الأيام", "Days", "float"), "advance_salary": ("السلفة", "Advance", "float"), "net_salary": ("صافي الراتب", "Net Salary", "float"), "invoice_amount": ("الفاتورة", "Invoice", "float")}, is_rtl, "ts")
 
 def render_invoices_page(conn, is_rtl):
     st.header("🧾 فواتير كل شهر - خطوط العالمية ش ش و" if is_rtl else "🧾 Monthly Client Invoices - GLOBAL LINES SPC")
@@ -89,5 +91,3 @@ def render_payroll_page(conn, is_rtl):
         for myr, wid, nar, nen, idt, pid, bic, iban, trd, due, car, cen, wd, dr, oth, otr, ded, adv, net, inv, rem in data:
             w.writerow([idt or "C", pid or "", f"GL-{wid:03d}", nen, bic or "BMUSOMRX", iban or "", "M", int(wd), f"{net:.3f}", f"{round(wd*dr,3):.3f}", oth, f"{round(oth*otr,3):.3f}", f"{round(adv,3):.3f}", "0.000", rem or f"Salary {myr}"])
         b1, b2 = st.columns(2)
-        b1.download_button("⬇️ تحميل ملف البنك المركزي الرسمي (SIF CSV)" if is_rtl else "⬇️ Download Oman CBO WPS (SIF CSV)", data=buf.getvalue().encode("utf-8"), file_name=f"SIF_{cr_v}_{bk_v}_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", width="stretch")
-        xls_pay = build_styled_xlsx("GLOBAL LINES SPC - Payroll & Profit Report", ["Month", "Worker (AR)", "Worker (EN)", "Trade", "Client", "Days", "Deduct", "Advance", "Net Salary", "Invoice"], xls_rows, (7, 8, 9, 10))
