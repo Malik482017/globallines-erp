@@ -28,7 +28,7 @@ if not st.session_state.role:
         st.subheader("GLOBAL LINES SPC - Cloud ERP")
         st.caption("Salalah - Sultanate of Oman | CR No: 1430392")
         pwd = st.text_input("رمز الدخول (PIN) | Access PIN", type="password")
-        if st.button("دخول النظام | Login", use_container_width=True, type="primary"):
+        if st.button("دخول النظام | Login", width="stretch", type="primary"):
             if pwd == "1430392": st.session_state.role = "admin"; st.rerun()
             elif pwd == "2026": st.session_state.role = "staff"; st.rerun()
             else: st.error("رمز الدخول غير صحيح | Invalid PIN")
@@ -38,12 +38,12 @@ with st.sidebar:
     st.markdown("### 🏢 خطوط العالمية ش ش و\n**GLOBAL LINES SPC**")
     role_lbl = ("المدير العام" if is_rtl else "General Manager (Admin)") if st.session_state.role == "admin" else ("موظف إدخال" if is_rtl else "Data Entry Staff")
     st.caption(f"{'الصلاحية:' if is_rtl else 'Role:'} {role_lbl}")
-    if st.button("🌐 English" if is_rtl else "🌐 العربية", use_container_width=True):
+    if st.button("🌐 English" if is_rtl else "🌐 العربية", width="stretch"):
         st.session_state.lang = "en" if is_rtl else "ar"; st.rerun()
     pages = (["لوحة التحكم والمصروفات", "الشركات المستأجرة", "سجل العمال والبنوك", "التايم شيت والخصومات", "فواتير كل شهر", "كشف الرواتب وحماية الأجور"] if is_rtl else ["Dashboard & Expenses", "Client Companies", "Workers & Banks", "Timesheet & OT", "Monthly Invoices", "Payroll & Oman WPS"]) if st.session_state.role == "admin" else (["التايم شيت والخصومات", "المصروفات التشغيلية", "سجل العمال والبنوك"] if is_rtl else ["Timesheet & OT", "Operational Expenses", "Workers & Banks"])
     page = st.radio("القائمة الرئيسية" if is_rtl else "Main Navigation", pages)
     st.divider()
-    if st.button("تسجيل خروج" if is_rtl else "Logout", use_container_width=True):
+    if st.button("تسجيل خروج" if is_rtl else "Logout", width="stretch"):
         st.session_state.role = None; st.rerun()
 
 conn = sqlite3.connect(DB_NAME)
@@ -77,7 +77,7 @@ if page in ("لوحة التحكم والمصروفات", "Dashboard & Expenses"
         if st.form_submit_button("إضافة مصروف +" if is_rtl else "+ Add Expense", type="primary"):
             conn.execute("INSERT INTO expenses (month_year, category, amount, notes) VALUES (?,?,?,?)", (em.strip(), ec, ea, en.strip())); conn.commit(); st.rerun()
     q_ex_df = "SELECT id AS الرقم, month_year AS الشهر, category AS البند, amount AS المبلغ, notes AS البيان FROM expenses ORDER BY id DESC" if is_rtl else "SELECT id AS ID, month_year AS Month, category AS Category, amount AS Amount, notes AS Notes FROM expenses ORDER BY id DESC"
-    st.dataframe(pd.read_sql_query(q_ex_df, conn), use_container_width=True, hide_index=True)
+    st.dataframe(pd.read_sql_query(q_ex_df, conn), width="stretch", hide_index=True)
 
 elif page in ("الشركات المستأجرة", "Client Companies"):
     st.header("🏭 الشركات المستأجرة للعمالة" if is_rtl else "🏭 Client Companies Management")
@@ -91,7 +91,7 @@ elif page in ("الشركات المستأجرة", "Client Companies"):
         if st.form_submit_button("حفظ الشركة +" if is_rtl else "+ Save Client", type="primary") and nar:
             conn.execute("INSERT INTO clients (name_ar, name_en, cr_number, phone, location) VALUES (?,?,?,?,?)", (nar.strip(), (nen or nar).strip(), cr.strip(), ph.strip(), lc.strip())); conn.commit(); st.rerun()
     q_cl = "SELECT id AS الرقم, name_ar AS 'الشركة عربي', name_en AS 'Company EN', cr_number AS 'السجل التجاري', phone AS الهاتف, location AS الموقع FROM clients ORDER BY id DESC" if is_rtl else "SELECT id AS ID, name_ar AS 'Client (AR)', name_en AS 'Company (EN)', cr_number AS 'CR No.', phone AS Phone, location AS Location FROM clients ORDER BY id DESC"
-    st.dataframe(pd.read_sql_query(q_cl, conn), use_container_width=True, hide_index=True)
+    st.dataframe(pd.read_sql_query(q_cl, conn), width="stretch", hide_index=True)
 
 elif page in ("سجل العمال والبنوك", "Workers & Banks"):
     st.header("👷 سجل العمال والبيانات البنكية" if is_rtl else "👷 Workers & Bank Registry")

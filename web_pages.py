@@ -56,7 +56,7 @@ def render_timesheet_page(conn, is_rtl):
             conn.execute("INSERT INTO timesheets (worker_id,month_year,working_days,actual_hours,ot_hours,advance_salary,shortage_days,shortage_hours,deduction_amount,net_salary,billed_hours,invoice_amount,remarks,attachment_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (wid, myr.strip(), wd, act, tot_ot, adv, hol, sh_h, ded, net, b_hrs, inv, rem.strip(), att_p)); conn.commit(); st.rerun()
     q_ar = "SELECT t.id AS الرقم, t.month_year AS الشهر, w.name_ar AS العامل, t.working_days AS الأيام, COALESCE(t.actual_hours,0) AS 'الساعات الفعلية', COALESCE(t.shortage_hours,0) AS 'نقص الساعات', t.deduction_amount AS الخصم, t.ot_hours AS 'إجمالي الإضافي', t.advance_salary AS السلفة, t.net_salary AS 'صافي الراتب', t.billed_hours AS 'ساعات الفاتورة', t.invoice_amount AS الفاتورة FROM timesheets t JOIN workers w ON t.worker_id=w.id ORDER BY t.id DESC"
     q_en = "SELECT t.id AS ID, t.month_year AS Month, w.name_en AS Worker, t.working_days AS Days, COALESCE(t.actual_hours,0) AS 'Actual Hrs', COALESCE(t.shortage_hours,0) AS 'Short Hrs', t.deduction_amount AS Deduction, t.ot_hours AS 'Total OT', t.advance_salary AS Advance, t.net_salary AS 'Net Salary', t.billed_hours AS 'Billed Hrs', t.invoice_amount AS Invoice FROM timesheets t JOIN workers w ON t.worker_id=w.id ORDER BY t.id DESC"
-    st.dataframe(pd.read_sql_query(q_ar if is_rtl else q_en, conn), use_container_width=True, hide_index=True)
+    st.dataframe(pd.read_sql_query(q_ar if is_rtl else q_en, conn), width="stretch", hide_index=True)
 
 def render_invoices_page(conn, is_rtl):
     st.header("🧾 فواتير كل شهر - خطوط العالمية ش ش و" if is_rtl else "🧾 Monthly Client Invoices - GLOBAL LINES SPC")
@@ -65,7 +65,7 @@ def render_invoices_page(conn, is_rtl):
         xls_inv = build_styled_xlsx("GLOBAL LINES SPC - Monthly Client Invoices", ["Month", "Client (AR)", "Client (EN)", "Workers", "Hours", "Subtotal (OMR)", "VAT 5%", "Grand Total (OMR)"], inv_rows, (6, 7, 8))
         st.download_button("⬇️ تصدير الفواتير إلى إكسل بالمعادلات (.XLSX)" if is_rtl else "⬇️ Export Invoices to Excel (.XLSX)", data=xls_inv, file_name=f"GLOBAL_LINES_Invoices_{datetime.now().strftime('%Y%m')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
     cols = ["الشهر", "الشركة عربي", "Company EN", "العمال", "الساعات", "المبلغ الأساسي", "ضريبة 5%", "الإجمالي النهائي"] if is_rtl else ["Month", "Client (AR)", "Client (EN)", "Workers", "Hours", "Subtotal (OMR)", "VAT 5%", "Grand Total (OMR)"]
-    st.dataframe(pd.DataFrame(inv_rows, columns=cols), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(inv_rows, columns=cols), width="stretch", hide_index=True)
 
 def render_payroll_page(conn, is_rtl):
     st.header("🏦 كشف الرواتب وملف حماية الأجور العُماني (SIF)" if is_rtl else "🏦 Payroll & Official Oman CBO WPS Export")
@@ -89,4 +89,5 @@ def render_payroll_page(conn, is_rtl):
         for myr, wid, nar, nen, idt, pid, bic, iban, trd, due, car, cen, wd, dr, oth, otr, ded, adv, net, inv, rem in data:
             w.writerow([idt or "C", pid or "", f"GL-{wid:03d}", nen, bic or "BMUSOMRX", iban or "", "M", int(wd), f"{net:.3f}", f"{round(wd*dr,3):.3f}", oth, f"{round(oth*otr,3):.3f}", f"{round(adv,3):.3f}", "0.000", rem or f"Salary {myr}"])
         b1, b2 = st.columns(2)
-        b1.download_button("⬇️ تحميل ملف البنك المركزي الرسمي (SIF CSV)" if is_rtl else "⬇️ Download Oman CBO WPS (SIF CSV)", data=buf.getvalue().encode("utf-8"), file_name=f"SIF_{cr_v}_{bk_v}_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", use_container_width=True)
+        b1.download_button("⬇️ تحميل ملف البنك المركزي الرسمي (SIF CSV)" if is_rtl else "⬇️ Download Oman CBO WPS (SIF CSV)", data=buf.getvalue().encode("utf-8"), file_name=f"SIF_{cr_v}_{bk_v}_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", width="stretch")
+        xls_pay = build_styled_xlsx("GLOBAL LINES SPC - Payroll & Profit Report", ["Month", "Worker (AR)", "Worker (EN)", "Trade", "Client", "Days", "Deduct", "Advance", "Net Salary", "Invoice"], xls_rows, (7, 8, 9, 10))
