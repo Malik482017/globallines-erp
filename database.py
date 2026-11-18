@@ -4,11 +4,23 @@ import os
 DB_NAME = "manpower_data.db"
 ATTACHMENTS_DIR = "attachments"
 
+def get_conn():
+    try:
+        import streamlit as st
+        if "TURSO_URL" in st.secrets and "TURSO_TOKEN" in st.secrets:
+            import libsql_experimental as libsql
+            return libsql.connect(DB_NAME, sync_url=st.secrets["TURSO_URL"], auth_token=st.secrets["TURSO_TOKEN"])
+    except Exception:
+        pass
+    return sqlite3.connect(DB_NAME)
+
 def init_db():
     if not os.path.exists(ATTACHMENTS_DIR):
         os.makedirs(ATTACHMENTS_DIR)
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_conn()
+    if hasattr(conn, "sync"):
+        conn.sync()
     cur = conn.cursor()
 
     cur.execute("""
@@ -81,8 +93,10 @@ def init_db():
     ):
         try:
             cur.execute(sql)
-        except sqlite3.OperationalError:
+        except Exception:
             pass
 
     conn.commit()
+    if hasattr(conn, "sync"):
+        conn.sync()
     conn.close()
