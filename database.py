@@ -1,15 +1,52 @@
 import sqlite3
 import os
+import requests
 
 DB_NAME = "manpower_data.db"
 ATTACHMENTS_DIR = "attachments"
+
+class TursoCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self._rows = []
+        self.lastrowid = None
+
+    def execute(self, sql, params=()):
+        args = []
+        for p in params:
+            if p is None: args.append({"type": "null"})
+            elif isinstance(p, bool): args.append({"type": "integer", "value": str(int(p))})
+            elif isinstance(p, int): args.append({"type": "integer", "value": str(p)})
+            elif isinstance(p, float): args.append({"type": "float", "value": p})
+            else: args.append({"type": "text", "value": str(p)})
+        res = requests.post(self.conn.url, headers=self.conn.headers, json={
+            "requests": [{"type": "execute", "stmt": {"sql": sql, "args": args}}, {"type": "close"}]
+        }, timeout=15).json()
+        r0 = res["results"][0]
+        if r0["type"] == "error":
+            raise sqlite3.OperationalError(r0["error"]["message"])
+        resp = r0["response"]["result"]
+        self.lastrowid = resp.get("last_insert_rowid")
+        self._rows = [tuple(None if c["type"] == "null" else (int(c["value"]) if c["type"] == "integer" else (float(c["value"]) if c["type"] == "float" else c["value"])) for c in row) for row in resp.get("rows", [])]
+        return self
+
+    def fetchall(self): return self._rows
+    def fetchone(self): return self._rows[0] if self._rows else None
+
+class TursoConn:
+    def __init__(self, url, token):
+        self.url = url.replace("libsql://", "https://").rstrip("/") + "/v2/pipeline"
+        self.headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    def cursor(self): return TursoCursor(self)
+    def execute(self, sql, params=()): return self.cursor().execute(sql, params)
+    def commit(self): pass
+    def close(self): pass
 
 def get_conn():
     try:
         import streamlit as st
         if "TURSO_URL" in st.secrets and "TURSO_TOKEN" in st.secrets:
-            import libsql_experimental as libsql
-            return libsql.connect(DB_NAME, sync_url=st.secrets["TURSO_URL"], auth_token=st.secrets["TURSO_TOKEN"])
+            return TursoConn(st.secrets["TURSO_URL"], st.secrets["TURSO_TOKEN"])
     except Exception:
         pass
     return sqlite3.connect(DB_NAME)
