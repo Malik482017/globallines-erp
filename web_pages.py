@@ -55,39 +55,3 @@ def render_timesheet_page(conn, is_rtl):
             if up_f:
                 with open(att_p, "wb") as f: f.write(up_f.getbuffer())
             conn.execute("INSERT INTO timesheets (worker_id,month_year,working_days,actual_hours,ot_hours,advance_salary,shortage_days,shortage_hours,deduction_amount,net_salary,billed_hours,invoice_amount,remarks,attachment_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (wid, myr.strip(), wd, act, tot_ot, adv, hol, sh_h, ded, net, b_hrs, inv, rem.strip(), att_p)); conn.commit(); st.rerun()
-    q_ar = "SELECT t.id AS الرقم, t.month_year AS الشهر, w.name_ar AS العامل, t.working_days AS الأيام, COALESCE(t.actual_hours,0) AS 'الساعات الفعلية', COALESCE(t.shortage_hours,0) AS 'نقص الساعات', t.deduction_amount AS الخصم, t.ot_hours AS 'إجمالي الإضافي', t.advance_salary AS السلفة, t.net_salary AS 'صافي الراتب', t.billed_hours AS 'ساعات الفاتورة', t.invoice_amount AS الفاتورة FROM timesheets t JOIN workers w ON t.worker_id=w.id ORDER BY t.id DESC"
-    q_en = "SELECT t.id AS ID, t.month_year AS Month, w.name_en AS Worker, t.working_days AS Days, COALESCE(t.actual_hours,0) AS 'Actual Hrs', COALESCE(t.shortage_hours,0) AS 'Short Hrs', t.deduction_amount AS Deduction, t.ot_hours AS 'Total OT', t.advance_salary AS Advance, t.net_salary AS 'Net Salary', t.billed_hours AS 'Billed Hrs', t.invoice_amount AS Invoice FROM timesheets t JOIN workers w ON t.worker_id=w.id ORDER BY t.id DESC"
-    st.dataframe(pd.read_sql_query(q_ar if is_rtl else q_en, conn), width="stretch", hide_index=True)
-    manage_record_bar(conn, "timesheets", {"month_year": ("الشهر", "Month", "text"), "working_days": ("الأيام", "Days", "float"), "advance_salary": ("السلفة", "Advance", "float"), "net_salary": ("صافي الراتب", "Net Salary", "float"), "invoice_amount": ("الفاتورة", "Invoice", "float")}, is_rtl, "ts")
-
-def render_invoices_page(conn, is_rtl):
-    st.header("🧾 فواتير كل شهر - خطوط العالمية ش ش و" if is_rtl else "🧾 Monthly Client Invoices - GLOBAL LINES SPC")
-    inv_rows = conn.execute("SELECT t.month_year, c.name_ar, c.name_en, COUNT(w.id), SUM(t.billed_hours), ROUND(SUM(t.invoice_amount),3), ROUND(SUM(t.invoice_amount)*0.05,3), ROUND(SUM(t.invoice_amount)*1.05,3) FROM timesheets t JOIN workers w ON t.worker_id=w.id JOIN clients c ON w.client_id=c.id GROUP BY t.month_year, c.id ORDER BY t.month_year DESC").fetchall()
-    if inv_rows:
-        xls_inv = build_styled_xlsx("GLOBAL LINES SPC - Monthly Client Invoices", ["Month", "Client (AR)", "Client (EN)", "Workers", "Hours", "Subtotal (OMR)", "VAT 5%", "Grand Total (OMR)"], inv_rows, (6, 7, 8))
-        st.download_button("⬇️ تصدير الفواتير إلى إكسل بالمعادلات (.XLSX)" if is_rtl else "⬇️ Export Invoices to Excel (.XLSX)", data=xls_inv, file_name=f"GLOBAL_LINES_Invoices_{datetime.now().strftime('%Y%m')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
-    cols = ["الشهر", "الشركة عربي", "Company EN", "العمال", "الساعات", "المبلغ الأساسي", "ضريبة 5%", "الإجمالي النهائي"] if is_rtl else ["Month", "Client (AR)", "Client (EN)", "Workers", "Hours", "Subtotal (OMR)", "VAT 5%", "Grand Total (OMR)"]
-    st.dataframe(pd.DataFrame(inv_rows, columns=cols), width="stretch", hide_index=True)
-
-def render_payroll_page(conn, is_rtl):
-    st.header("🏦 كشف الرواتب وملف حماية الأجور العُماني (SIF)" if is_rtl else "🏦 Payroll & Official Oman CBO WPS Export")
-    c1, c2, c3, c4 = st.columns(4)
-    nm_v = c1.text_input("الشركة الدافعة" if is_rtl else "Employer Name", value="GLOBAL LINES SPC")
-    cr_v = c2.text_input("السجل التجاري" if is_rtl else "Employer CR No.", value="1430392")
-    bk_v = c3.text_input("رمز البنك" if is_rtl else "Payer Bank", value="BMUS")
-    ac_v = c4.text_input("حساب بنك مسقط" if is_rtl else "Payer Account No.", value="0423060354940014")
-    data = conn.execute("SELECT t.month_year, w.id, w.name_ar, w.name_en, w.id_type, w.passport_id, w.bank_bic, w.bank_account, w.trade, w.salary_due_day, c.name_ar, c.name_en, t.working_days, w.daily_rate, t.ot_hours, w.ot_rate, t.deduction_amount, t.advance_salary, t.net_salary, t.invoice_amount, t.remarks FROM timesheets t JOIN workers w ON t.worker_id=w.id LEFT JOIN clients c ON w.client_id=c.id ORDER BY t.id DESC").fetchall()
-    if data:
-        tot_net, first_m, xls_rows = 0.0, "", []
-        for myr, wid, nar, nen, idt, pid, bic, iban, trd, due, car, cen, wd, dr, oth, otr, ded, adv, net, inv, rem in data:
-            tot_net += float(net or 0)
-            if not first_m: first_m = str(myr)
-            xls_rows.append((myr, nar, nen, trd, cen or "-", float(wd), float(ded), float(adv), float(net), float(inv)))
-        yr_s, mo_s = first_m.split("-") if "-" in first_m else (datetime.now().strftime("%Y"), datetime.now().strftime("%m"))
-        buf = io.StringIO(); w = csv.writer(buf)
-        w.writerow(["Employer CR-NO", "Employer Name", "Payer Bank Short Name", "Payer Account Number", "Salary Year", "Salary Month", "Total Salaries", "Number of Records", "Payment Type"])
-        w.writerow([cr_v, nm_v, bk_v, ac_v, yr_s, mo_s, f"{tot_net:.3f}", len(data), "Salary"])
-        w.writerow(["Employee ID Type", "Employee ID", "Reference Number", "Employee Name", "Employee Bank BIC", "Employee Account", "Salary Frequency", "Number of Working Days", "Net Salary", "Basic Salary", "Extra Hours", "Extra Income", "Deductions", "Social Security Ded.", "Notes / Comments"])
-        for myr, wid, nar, nen, idt, pid, bic, iban, trd, due, car, cen, wd, dr, oth, otr, ded, adv, net, inv, rem in data:
-            w.writerow([idt or "C", pid or "", f"GL-{wid:03d}", nen, bic or "BMUSOMRX", iban or "", "M", int(wd), f"{net:.3f}", f"{round(wd*dr,3):.3f}", oth, f"{round(oth*otr,3):.3f}", f"{round(adv,3):.3f}", "0.000", rem or f"Salary {myr}"])
-        b1, b2 = st.columns(2)
