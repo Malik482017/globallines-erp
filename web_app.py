@@ -1,10 +1,9 @@
 import streamlit as st
-import sqlite3, os, io, csv
+import sqlite3
 import pandas as pd
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from datetime import datetime
-from database import init_db, DB_NAME, ATTACHMENTS_DIR
+from database import init_db, DB_NAME
+from web_pages import render_timesheet_page, render_invoices_page, render_payroll_page
 
 st.set_page_config(page_title="خطوط العالمية ش ش و | GLOBAL LINES SPC", page_icon="🏢", layout="wide", initial_sidebar_state="auto")
 init_db()
@@ -21,28 +20,6 @@ div[data-testid="stMetric"] label, div[data-testid="stMetric"] div {{ color: #FF
     div[data-testid="column"] {{ width: 100% !important; flex: 1 1 100% !important; min-width: 100% !important; }}
 }}
 </style>""", unsafe_allow_html=True)
-
-def build_styled_xlsx(title_txt, headers, rows_list, money_cols):
-    wb = Workbook(); ws = wb.active; ws.title = "Report"
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
-    ws.cell(1, 1, title_txt).font = Font(size=13, bold=True, color="FFFFFF")
-    ws.cell(1, 1).fill = PatternFill("solid", fgColor="0F172A")
-    ws.cell(1, 1).alignment = Alignment(horizontal="center")
-    thin = Side(border_style="thin", color="CBD5E1"); bdr = Border(left=thin, right=thin, top=thin, bottom=thin)
-    for ci, h in enumerate(headers, start=1):
-        c = ws.cell(3, ci, h); c.font = Font(bold=True, color="FFFFFF"); c.fill = PatternFill("solid", fgColor="1D4ED8"); c.alignment = Alignment(horizontal="center"); c.border = bdr
-        ws.column_dimensions[c.column_letter].width = 18
-    for idx, r in enumerate(rows_list, start=4):
-        for ci, v in enumerate(r, start=1):
-            c = ws.cell(idx, ci, v); c.border = bdr; c.alignment = Alignment(horizontal="center")
-            if ci in money_cols: c.number_format = "0.000"
-    er = 3 + len(rows_list); tr = er + 1; ws.cell(tr, 1, "TOTAL").font = Font(bold=True)
-    for ci in money_cols:
-        col_let = ws.cell(3, ci).column_letter
-        c = ws.cell(tr, ci, f"=SUM({col_let}4:{col_let}{er})")
-        c.font = Font(bold=True); c.fill = PatternFill("solid", fgColor="E2E8F0"); c.border = bdr; c.number_format = "0.000"; c.alignment = Alignment(horizontal="center")
-    buf = io.BytesIO(); wb.save(buf)
-    return buf.getvalue()
 
 if not st.session_state.role:
     c1, c2, c3 = st.columns((1, 2, 1))
@@ -82,11 +59,11 @@ if page in ("لوحة التحكم والمصروفات", "Dashboard & Expenses"
         (exp,) = conn.execute(q_ex, () if sel_m == all_lbl else (sel_m,)).fetchone()
         prof = float(inv) - (float(sal) + float(exp))
         m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("إجمالي الفواتير", f"{float(inv):,.3f} OMR")
-        m2.metric("إجمالي الرواتب", f"{float(sal):,.3f} OMR")
-        m3.metric("المصروفات", f"{float(exp):,.3f} OMR")
-        m4.metric("الخصومات", f"{float(ded):,.3f} OMR")
-        m5.metric("صافي الربح", f"{prof:,.3f} OMR")
+        m1.metric("إجمالي الفواتير", f"{float(inv):,.3f}")
+        m2.metric("إجمالي الرواتب", f"{float(sal):,.3f}")
+        m3.metric("المصروفات", f"{float(exp):,.3f}")
+        m4.metric("الخصومات", f"{float(ded):,.3f}")
+        m5.metric("صافي الربح", f"{prof:,.3f}")
 
     st.subheader("💸 تسجيل المصروفات التشغيلية")
     with st.form("exp_form", clear_on_submit=True):
@@ -121,6 +98,12 @@ elif page in ("سجل العمال والبنوك", "Workers & Banks"):
     st.dataframe(pd.read_sql_query("SELECT w.id AS الرقم, w.name_ar AS 'الاسم عربي', w.name_en AS 'Name EN', w.trade AS المهنة, c.name_ar AS الشركة, w.daily_rate AS 'أجر اليوم', COALESCE(w.agreed_daily_hours,10) AS 'ساعات اليوم', w.client_hourly_rate AS 'سعر الشركة', w.passport_id AS الهوية, w.bank_account AS الحساب FROM workers w LEFT JOIN clients c ON w.client_id=c.id ORDER BY w.id DESC", conn), use_container_width=True, hide_index=True)
 
 elif page in ("التايم شيت والخصومات", "Timesheet & OT"):
-    st.header("⏱️ إدارة التايم شيت (حساب الإضافي والخصم تلقائياً)")
-    wks = conn.execute("SELECT id, name_ar, name_en, daily_rate, COALESCE(agreed_daily_hours,10), ot_rate, client_hourly_rate FROM workers").fetchall()
-    wmap = {f"{wid} - {nar if is_rtl else nen} ({dhrs}h)": (wid, dr, dhrs, otr, cr) for wid, nar, nen, dr, dhrs, otr, cr in wks}
+    render_timesheet_page(conn, is_rtl)
+
+elif page in ("فواتير كل شهر", "Monthly Invoices"):
+    render_invoices_page(conn)
+
+elif page in ("كشف الرواتب وحماية الأجور", "Payroll & Oman WPS"):
+    render_payroll_page(conn)
+
+conn.close()
