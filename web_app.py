@@ -7,7 +7,8 @@ from web_pages import render_timesheet_page, render_invoices_page, render_payrol
 from web_admin import manage_record_bar
 
 st.set_page_config(page_title="خطوط العالمية ش ش و | GLOBAL LINES SPC", page_icon="🏢", layout="wide", initial_sidebar_state="collapsed")
-init_db()
+if "db_ready" not in st.session_state:
+    init_db(); st.session_state.db_ready = True
 
 if "lang" not in st.session_state: st.session_state.lang = "ar"
 if "role" not in st.session_state: st.session_state.role = None
