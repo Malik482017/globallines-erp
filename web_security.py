@@ -1,6 +1,5 @@
 import streamlit as st
-import smtplib, random
-from email.message import EmailMessage
+import requests, random
 
 def ensure_auth_table(conn):
     conn.execute("CREATE TABLE IF NOT EXISTS app_settings (k TEXT PRIMARY KEY, v TEXT)")
@@ -18,38 +17,36 @@ def get_pins(conn):
     stf = s[0] if isinstance(s, (tuple, list)) else (s or "2026")
     return str(adm), str(stf)
 
-def send_otp_email(otp_code):
-    sender = st.secrets.get("SMTP_EMAIL", "")
-    app_pass = st.secrets.get("SMTP_PASS", "").replace(" ", "")
-    receiver = st.secrets.get("ADMIN_EMAIL", sender)
-    if not sender or not app_pass:
-        return False, "يرجى إضافة SMTP_EMAIL و SMTP_PASS في إعدادات Secrets أولاً"
-    msg = EmailMessage()
-    msg["Subject"] = "رمز التحقق لتغيير كلمة المرور - خطوط العالمية ش ش و"
-    msg["From"] = sender
-    msg["To"] = receiver
-    msg.set_content(f"رمز التحقق (OTP) الخاص بتغيير كلمة مرور المدير العام هو:\n\n{otp_code}")
-    with smtplib.SMTP_SSL("://gmail.com", 465, timeout=15) as server:
-        server.login(sender, app_pass)
-        server.send_message(msg)
-    return True, receiver
+def send_otp_telegram(otp_code):
+    token = st.secrets.get("TG_BOT_TOKEN", "").strip()
+    chat_id = str(st.secrets.get("TG_CHAT_ID", "")).strip()
+    if not token or not chat_id:
+        return False, "يرجى إضافة TG_BOT_TOKEN و TG_CHAT_ID في إعدادات Secrets أولاً"
+    res = requests.post(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        json={"chat_id": chat_id, "text": f"🔐 رمز التحقق (OTP) لتغيير كلمة مرور المدير العام في نظام خطوط العالمية ش ش و هو:\n\n{otp_code}"},
+        timeout=15
+    )
+    if res.status_code == 200:
+        return True, "Telegram"
+    return False, f"خطأ ({res.status_code}): {res.text}"
 
 def render_password_change_box(conn, is_rtl):
     with st.expander("🔐 تغيير كلمة المرور (OTP)" if is_rtl else "🔐 Change Admin PIN (OTP)"):
-        if st.button("📧 إرسال رمز OTP إلى الإيميل" if is_rtl else "📧 Send OTP to Email", width="stretch"):
+        if st.button("📲 إرسال رمز OTP إلى تيليجرام" if is_rtl else "📲 Send OTP to Telegram", width="stretch"):
             code = str(random.randint(100000, 999999))
             try:
-                ok, info = send_otp_email(code)
+                ok, info = send_otp_telegram(code)
                 if ok:
                     st.session_state.pending_otp = code
-                    st.success(f"تم إرسال الرمز إلى: {info}" if is_rtl else f"OTP sent to: {info}")
+                    st.success("تم إرسال رمز التحقق إلى حسابك في تيليجرام!" if is_rtl else "OTP sent to your Telegram!")
                 else:
                     st.error(info)
             except Exception as e:
                 st.error(f"فشل الإرسال: {e}")
 
         if "pending_otp" in st.session_state:
-            otp_in = st.text_input("أدخل رمز OTP المرسل لإيميلك" if is_rtl else "Enter Email OTP Code", max_chars=6)
+            otp_in = st.text_input("أدخل رمز OTP المرسل لتيليجرام" if is_rtl else "Enter Telegram OTP Code", max_chars=6)
             new_pin = st.text_input("كلمة المرور الجديدة" if is_rtl else "New Admin PIN", type="password")
             conf_pin = st.text_input("تأكيد كلمة المرور الجديدة" if is_rtl else "Confirm New PIN", type="password")
             if st.button("💾 تأكيد وحفظ كلمة المرور" if is_rtl else "💾 Verify & Save PIN", type="primary", width="stretch"):
