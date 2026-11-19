@@ -23,7 +23,7 @@ class TursoCursor:
         res = _HTTP_SESSION.post(self.conn.url, headers=self.conn.headers, json={
             "requests": [{"type": "execute", "stmt": {"sql": sql, "args": args}}, {"type": "close"}]
         }, timeout=15).json()
-        r0 = res["results"]
+        r0 = res["results"][0]
         if r0["type"] == "error":
             raise sqlite3.OperationalError(r0["error"]["message"])
         resp = r0["response"]["result"]
@@ -32,7 +32,7 @@ class TursoCursor:
         return self
 
     def fetchall(self): return self._rows
-    def fetchone(self): return self._rows if self._rows else None
+    def fetchone(self): return self._rows[0] if self._rows else None
 
 class TursoConn:
     def __init__(self, url, token):

@@ -1,8 +1,7 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 from datetime import datetime
-from database import init_db, DB_NAME
+from database import init_db, get_conn
 from web_pages import render_timesheet_page, render_invoices_page, render_payroll_page
 from web_admin import manage_record_bar
 
@@ -47,7 +46,7 @@ with st.sidebar:
     if st.button("تسجيل خروج" if is_rtl else "Logout", width="stretch"):
         st.session_state.role = None; st.rerun()
 
-conn = sqlite3.connect(DB_NAME)
+conn = get_conn()
 
 if page in ("لوحة التحكم والمصروفات", "Dashboard & Expenses", "المصروفات التشغيلية", "Operational Expenses"):
     st.header("📊 لوحة التحكم والإحصائيات المالية" if is_rtl else "📊 Executive Financial Dashboard")
@@ -77,8 +76,9 @@ if page in ("لوحة التحكم والمصروفات", "Dashboard & Expenses"
         en = c4.text_input("البيان" if is_rtl else "Notes")
         if st.form_submit_button("إضافة مصروف +" if is_rtl else "+ Add Expense", type="primary"):
             conn.execute("INSERT INTO expenses (month_year, category, amount, notes) VALUES (?,?,?,?)", (em.strip(), ec, ea, en.strip())); conn.commit(); st.rerun()
-    q_ex_df = "SELECT id AS الرقم, month_year AS الشهر, category AS البند, amount AS المبلغ, notes AS البيان FROM expenses ORDER BY id DESC" if is_rtl else "SELECT id AS ID, month_year AS Month, category AS Category, amount AS Amount, notes AS Notes FROM expenses ORDER BY id DESC"
-    st.dataframe(pd.read_sql_query(q_ex_df, conn), width="stretch", hide_index=True)
+    ex_rows = conn.execute("SELECT id, month_year, category, amount, notes FROM expenses ORDER BY id DESC").fetchall()
+    ex_cols = ["الرقم", "الشهر", "البند", "المبلغ", "البيان"] if is_rtl else ["ID", "Month", "Category", "Amount", "Notes"]
+    st.dataframe(pd.DataFrame(ex_rows, columns=ex_cols), width="stretch", hide_index=True)
     manage_record_bar(conn, "expenses", {"month_year": ("الشهر", "Month", "text"), "category": ("البند", "Category", "text"), "amount": ("المبلغ", "Amount", "float"), "notes": ("البيان", "Notes", "text")}, is_rtl, "exp")
 elif page in ("الشركات المستأجرة", "Client Companies"):
     st.header("🏭 الشركات المستأجرة للعمالة" if is_rtl else "🏭 Client Companies Management")
@@ -91,8 +91,9 @@ elif page in ("الشركات المستأجرة", "Client Companies"):
         lc = c5.text_input("الموقع" if is_rtl else "Location")
         if st.form_submit_button("حفظ الشركة +" if is_rtl else "+ Save Client", type="primary") and nar:
             conn.execute("INSERT INTO clients (name_ar, name_en, cr_number, phone, location) VALUES (?,?,?,?,?)", (nar.strip(), (nen or nar).strip(), cr.strip(), ph.strip(), lc.strip())); conn.commit(); st.rerun()
-    q_cl = "SELECT id AS الرقم, name_ar AS 'الشركة عربي', name_en AS 'Company EN', cr_number AS 'السجل التجاري', phone AS الهاتف, location AS الموقع FROM clients ORDER BY id DESC" if is_rtl else "SELECT id AS ID, name_ar AS 'Client (AR)', name_en AS 'Company (EN)', cr_number AS 'CR No.', phone AS Phone, location AS Location FROM clients ORDER BY id DESC"
-    st.dataframe(pd.read_sql_query(q_cl, conn), width="stretch", hide_index=True)
+    cl_rows = conn.execute("SELECT id, name_ar, name_en, cr_number, phone, location FROM clients ORDER BY id DESC").fetchall()
+    cl_cols = ["الرقم", "الشركة عربي", "Company EN", "السجل التجاري", "الهاتف", "الموقع"] if is_rtl else ["ID", "Client (AR)", "Company (EN)", "CR No.", "Phone", "Location"]
+    st.dataframe(pd.DataFrame(cl_rows, columns=cl_cols), width="stretch", hide_index=True)
     manage_record_bar(conn, "clients", {"name_ar": ("الاسم عربي", "Name AR", "text"), "name_en": ("الاسم إنجليزي", "Name EN", "text"), "cr_number": ("السجل التجاري", "CR No", "text"), "phone": ("الهاتف", "Phone", "text"), "location": ("الموقع", "Location", "text")}, is_rtl, "cl")
 
 elif page in ("سجل العمال والبنوك", "Workers & Banks"):
@@ -117,8 +118,9 @@ elif page in ("سجل العمال والبنوك", "Workers & Banks"):
         cr_rate = c12.number_input("سعر الساعة للشركة" if is_rtl else "Client Hourly Rate", value=1.200, format="%.3f")
         if st.form_submit_button("إضافة عامل +" if is_rtl else "+ Add Worker", type="primary") and war and cmap:
             conn.execute("INSERT INTO workers (name_ar,name_en,id_type,passport_id,bank_bic,bank_account,trade,daily_rate,agreed_daily_hours,ot_rate,standard_days,client_hourly_rate,client_id,salary_due_day) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (war.strip(), (wen or war).strip(), idt, pid.strip(), bic.strip(), iban.strip(), trd, dr, dhrs, otr, 30, cr_rate, cmap[cl_sel], 28)); conn.commit(); st.rerun()
-    q_wk = "SELECT w.id AS الرقم, w.name_ar AS 'الاسم عربي', w.name_en AS 'Name EN', w.trade AS المهنة, c.name_ar AS الشركة, w.daily_rate AS 'أجر اليوم', COALESCE(w.agreed_daily_hours,10) AS 'ساعات اليوم', w.client_hourly_rate AS 'سعر الشركة', w.passport_id AS الهوية, w.bank_account AS الحساب FROM workers w LEFT JOIN clients c ON w.client_id=c.id ORDER BY w.id DESC" if is_rtl else "SELECT w.id AS ID, w.name_ar AS 'Name (AR)', w.name_en AS 'Name (EN)', w.trade AS Trade, c.name_en AS Client, w.daily_rate AS 'Daily Rate', COALESCE(w.agreed_daily_hours,10) AS 'Daily Hrs', w.client_hourly_rate AS 'Client Rate', w.passport_id AS 'ID/Pass', w.bank_account AS Account FROM workers w LEFT JOIN clients c ON w.client_id=c.id ORDER BY w.id DESC"
-    st.dataframe(pd.read_sql_query(q_wk, conn), width="stretch", hide_index=True)
+    wk_rows = conn.execute("SELECT w.id, w.name_ar, w.name_en, w.trade, COALESCE(c.name_ar if ? else c.name_en, '-'), w.daily_rate, COALESCE(w.agreed_daily_hours,10), w.client_hourly_rate, w.passport_id, w.bank_account FROM workers w LEFT JOIN clients c ON w.client_id=c.id ORDER BY w.id DESC", (1 if is_rtl else 0,)).fetchall()
+    wk_cols = ["الرقم", "الاسم عربي", "Name EN", "المهنة", "الشركة", "أجر اليوم", "ساعات اليوم", "سعر الشركة", "الهوية", "الحساب"] if is_rtl else ["ID", "Name (AR)", "Name (EN)", "Trade", "Client", "Daily Rate", "Daily Hrs", "Client Rate", "ID/Pass", "Account"]
+    st.dataframe(pd.DataFrame(wk_rows, columns=wk_cols), width="stretch", hide_index=True)
     manage_record_bar(conn, "workers", {"name_ar": ("الاسم عربي", "Name AR", "text"), "name_en": ("الاسم إنجليزي", "Name EN", "text"), "passport_id": ("الهوية", "ID/Pass", "text"), "bank_account": ("الحساب البنكي", "Account", "text"), "daily_rate": ("أجر اليوم", "Daily Rate", "float"), "client_hourly_rate": ("سعر الشركة", "Client Rate", "float")}, is_rtl, "wk")
 
 elif page in ("التايم شيت والخصومات", "Timesheet & OT"):
