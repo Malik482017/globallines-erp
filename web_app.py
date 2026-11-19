@@ -4,6 +4,7 @@ from datetime import datetime
 from database import init_db, get_conn
 from web_pages import render_timesheet_page, render_invoices_page, render_payroll_page
 from web_admin import manage_record_bar
+from web_security import get_pins, render_password_change_box
 
 st.set_page_config(page_title="خطوط العالمية ش ش و | GLOBAL LINES SPC", page_icon="🏢", layout="wide", initial_sidebar_state="collapsed")
 if "db_ready" not in st.session_state:
@@ -29,8 +30,11 @@ if not st.session_state.role:
         st.caption("Salalah - Sultanate of Oman | CR No: 1430392")
         pwd = st.text_input("رمز الدخول (PIN) | Access PIN", type="password")
         if st.button("دخول النظام | Login", width="stretch", type="primary"):
-            if pwd == "1430392": st.session_state.role = "admin"; st.rerun()
-            elif pwd == "2026": st.session_state.role = "staff"; st.rerun()
+            c_tmp = get_conn()
+            adm_pin, stf_pin = get_pins(c_tmp)
+            c_tmp.close()
+            if pwd == adm_pin: st.session_state.role = "admin"; st.rerun()
+            elif pwd == stf_pin: st.session_state.role = "staff"; st.rerun()
             else: st.error("رمز الدخول غير صحيح | Invalid PIN")
     st.stop()
 
@@ -43,10 +47,15 @@ with st.sidebar:
     pages = (["لوحة التحكم والمصروفات", "الشركات المستأجرة", "سجل العمال والبنوك", "التايم شيت والخصومات", "فواتير كل شهر", "كشف الرواتب وحماية الأجور"] if is_rtl else ["Dashboard & Expenses", "Client Companies", "Workers & Banks", "Timesheet & OT", "Monthly Invoices", "Payroll & Oman WPS"]) if st.session_state.role == "admin" else (["التايم شيت والخصومات", "المصروفات التشغيلية", "سجل العمال والبنوك"] if is_rtl else ["Timesheet & OT", "Operational Expenses", "Workers & Banks"])
     page = st.radio("القائمة الرئيسية" if is_rtl else "Main Navigation", pages)
     st.divider()
+    if st.session_state.role == "admin":
+        c_sec = get_conn()
+        render_password_change_box(c_sec, is_rtl)
+        c_sec.close()
     if st.button("تسجيل خروج" if is_rtl else "Logout", width="stretch"):
         st.session_state.role = None; st.rerun()
 
 conn = get_conn()
+
 
 if page in ("لوحة التحكم والمصروفات", "Dashboard & Expenses", "المصروفات التشغيلية", "Operational Expenses"):
     st.header("📊 لوحة التحكم والإحصائيات المالية" if is_rtl else "📊 Executive Financial Dashboard")

@@ -4,12 +4,16 @@ def manage_record_bar(conn, table_name, edit_fields, is_rtl, key_prefix):
     rows = conn.execute(f"SELECT id FROM {table_name} ORDER BY id DESC").fetchall()
     if not rows:
         return
-    ids = [r[0] for r in rows]
+    ids = [int(r[0]) if isinstance(r, (tuple, list)) else int(r) for r in rows]
     st.markdown("---")
     with st.expander("✏️ تعديل أو حذف سجل من الجدول" if is_rtl else "✏️ Edit or Delete Record"):
-        c1, c2 = st.columns([2, 1])
-        sel_id = c1.selectbox("اختر رقم السجل (ID)" if is_rtl else "Select Record ID", ids, key=f"{key_prefix}_id")
+        c1, c2 = st.columns(2)
+        sel_id = int(c1.selectbox("اختر رقم السجل (ID)" if is_rtl else "Select Record ID", ids, key=f"{key_prefix}_id"))
         if c2.button("🗑️ حذف السجل نهائياً" if is_rtl else "🗑️ Delete Record", key=f"{key_prefix}_del", type="primary"):
+            if table_name == "workers":
+                conn.execute("DELETE FROM timesheets WHERE worker_id=?", (sel_id,))
+            elif table_name == "clients":
+                conn.execute("UPDATE workers SET client_id=NULL WHERE client_id=?", (sel_id,))
             conn.execute(f"DELETE FROM {table_name} WHERE id=?", (sel_id,))
             conn.commit()
             st.rerun()
